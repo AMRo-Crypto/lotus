@@ -59,11 +59,14 @@ type ProviderNodeAdapter struct {
 	scMgr                       *SectorCommittedManager
 }
 
-func NewProviderNodeAdapter(fc *config.MinerFeeConfig, dc *config.DealmakingConfig) func(mctx helpers.MetricsCtx, lc fx.Lifecycle, dag dtypes.StagingDAG, secb *sectorblocks.SectorBlocks, full v1api.FullNode, dealPublisher *DealPublisher) storagemarket.StorageProviderNode {
-	return func(mctx helpers.MetricsCtx, lc fx.Lifecycle, dag dtypes.StagingDAG, secb *sectorblocks.SectorBlocks, full v1api.FullNode, dealPublisher *DealPublisher) storagemarket.StorageProviderNode {
+func NewProviderNodeAdapter(fc *config.MinerFeeConfig, dc *config.DealmakingConfig) func(mctx helpers.MetricsCtx, lc fx.Lifecycle, dag dtypes.StagingDAG, secb *sectorblocks.SectorBlocks, full v1api.FullNode, dealPublisher *DealPublisher) (storagemarket.StorageProviderNode, error) {
+	return func(mctx helpers.MetricsCtx, lc fx.Lifecycle, dag dtypes.StagingDAG, secb *sectorblocks.SectorBlocks, full v1api.FullNode, dealPublisher *DealPublisher) (storagemarket.StorageProviderNode, error) {
 		ctx := helpers.LifecycleCtx(mctx, lc)
 
-		ev := events.NewEvents(ctx, full)
+		ev, err := events.NewEvents(ctx, full)
+		if err != nil {
+			return nil, err
+		}
 		na := &ProviderNodeAdapter{
 			FullNode: full,
 
@@ -82,7 +85,7 @@ func NewProviderNodeAdapter(fc *config.MinerFeeConfig, dc *config.DealmakingConf
 		}
 		na.scMgr = NewSectorCommittedManager(ev, na, &apiWrapper{api: full})
 
-		return na
+		return na, nil
 	}
 }
 
@@ -345,7 +348,7 @@ func (n *ProviderNodeAdapter) OnDealExpiredOrSlashed(ctx context.Context, dealID
 	}
 
 	// Called immediately to check if the deal has already expired or been slashed
-	checkFunc := func(ts *types.TipSet) (done bool, more bool, err error) {
+	checkFunc := func(ctx context.Context, ts *types.TipSet) (done bool, more bool, err error) {
 		if ts == nil {
 			// keep listening for events
 			return false, true, nil
